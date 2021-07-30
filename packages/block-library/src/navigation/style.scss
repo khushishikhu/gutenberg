@@ -96,7 +96,7 @@
 	// We use :where to keep specificity minimal, yet still scope it to only the navigation block.
 	// That way if padding is set in theme.json, it still wins.
 	// https://css-tricks.com/almanac/selectors/w/where/
-	:where(.submenu-container, .wp-block-navigation-link__container) {
+	:where(.submenu-container, .wp-block-navigation-link__container, .wp-block-dropdown__container) {
 		background-color: inherit;
 		color: inherit;
 		position: absolute;
@@ -141,7 +141,8 @@
 		// On smaller breakpoints, they open vertically, accordion-style.
 		@include break-medium {
 			.submenu-container,
-			.wp-block-navigation-link__container {
+			.wp-block-navigation-link__container,
+			.wp-block-dropdown__container {
 				left: 100%;
 				top: -1px; // Border width.
 
@@ -309,7 +310,8 @@
 // Default background and font color.
 .wp-block-navigation:not(.has-background) {
 	.submenu-container, // This target items created by the Page List block.
-	.wp-block-navigation__container .wp-block-navigation-link__container {
+	.wp-block-navigation__container .wp-block-navigation-link__container,
+	.wp-block-dropdown__container {
 		// Set a background color for submenus so that they're not transparent.
 		// NOTE TO DEVS - if refactoring this code, please double-check that
 		// submenus have a default background color, this feature has regressed

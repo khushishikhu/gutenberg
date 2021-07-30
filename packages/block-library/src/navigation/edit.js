@@ -46,6 +46,7 @@ const ALLOWED_BLOCKS = [
 	'core/page-list',
 	'core/spacer',
 	'core/home-link',
+	'core/dropdown',
 ];
 
 const LAYOUT = {

@@ -2,7 +2,7 @@
  * External dependencies
  */
 import classnames from 'classnames';
-import { escape } from 'lodash';
+import { escape, pull } from 'lodash';
 
 /**
  * WordPress dependencies
@@ -42,6 +42,7 @@ import {
 import { placeCaretAtHorizontalEdge } from '@wordpress/dom';
 import { link as linkIcon } from '@wordpress/icons';
 import { store as coreStore } from '@wordpress/core-data';
+import { speak } from '@wordpress/a11y';
 
 /**
  * Internal dependencies
@@ -49,7 +50,9 @@ import { store as coreStore } from '@wordpress/core-data';
 import { ItemSubmenuIcon } from './icons';
 import { name } from './block.json';
 
-const ALLOWED_BLOCKS = [ 'core/navigation-link' ];
+const ALLOWED_BLOCKS = [ 'core/navigation-link', 'core/dropdown' ];
+
+const MAX_NESTING = 5;
 
 /**
  * A React hook to determine if it's dragging within the target element.
@@ -264,7 +267,7 @@ export const updateNavigationLinkBlockAttributes = (
 	} );
 };
 
-export default function NavigationLinkEdit( {
+export default function DropdownEdit( {
 	attributes,
 	isSelected,
 	setAttributes,
@@ -293,11 +296,12 @@ export default function NavigationLinkEdit( {
 	const [ isLinkOpen, setIsLinkOpen ] = useState( false );
 	const listItemRef = useRef( null );
 	const isDraggingWithin = useIsDraggingWithin( listItemRef );
-	const itemLabelPlaceholder = __( 'Add link…' );
+	const itemLabelPlaceholder = __( 'Add text…' );
 	const ref = useRef();
 
 	const {
-		isTopLevelLink,
+		isAtMaxNesting,
+		isTopLevelItem,
 		isParentOfSelectedBlock,
 		isImmediateParentOfSelectedBlock,
 		hasDescendants,
@@ -319,7 +323,10 @@ export default function NavigationLinkEdit( {
 				.length;
 
 			return {
-				isTopLevelLink:
+				isAtMaxNesting:
+					getBlockParentsByBlockName( clientId, name ).length >=
+					MAX_NESTING,
+				isTopLevelItem:
 					getBlockParentsByBlockName( clientId, name ).length === 0,
 				isParentOfSelectedBlock: hasSelectedInnerBlock(
 					clientId,
@@ -347,17 +354,7 @@ export default function NavigationLinkEdit( {
 	);
 
 	// Store the colors from context as attributes for rendering
-	useEffect( () => setAttributes( { isTopLevelLink } ), [ isTopLevelLink ] );
-
-	// Show the LinkControl on mount if the URL is empty
-	// ( When adding a new menu item)
-	// This can't be done in the useState call because it conflicts
-	// with the autofocus behavior of the BlockListBlock component.
-	useEffect( () => {
-		if ( ! url ) {
-			setIsLinkOpen( true );
-		}
-	}, [] );
+	useEffect( () => setAttributes( { isTopLevelItem } ), [ isTopLevelItem ] );
 
 	/**
 	 * The hook shouldn't be necessary but due to a focus loss happening
@@ -401,23 +398,6 @@ export default function NavigationLinkEdit( {
 		selection.addRange( range );
 	}
 
-	/**
-	 * Removes the current link if set.
-	 */
-	function removeLink() {
-		// Reset all attributes that comprise the link.
-		setAttributes( {
-			url: '',
-			label: '',
-			id: '',
-			kind: '',
-			type: '',
-		} );
-
-		// Close the link editing UI.
-		setIsLinkOpen( false );
-	}
-
 	let userCanCreate = false;
 	if ( ! type || type === 'page' ) {
 		userCanCreate = userCanCreatePages;
@@ -447,11 +427,11 @@ export default function NavigationLinkEdit( {
 		customTextColor,
 		backgroundColor,
 		customBackgroundColor,
-	} = getColors( context, ! isTopLevelLink );
+	} = getColors( context, ! isTopLevelItem );
 
 	const blockProps = useBlockProps( {
 		ref: listItemRef,
-		className: classnames( 'wp-block-navigation-item', {
+		className: classnames( {
 			'is-editing': isSelected || isParentOfSelectedBlock,
 			'is-dragging-within': isDraggingWithin,
 			'has-link': !! url,
@@ -470,31 +450,28 @@ export default function NavigationLinkEdit( {
 		},
 	} );
 
-	if ( ! url ) {
-		blockProps.onClick = () => setIsLinkOpen( true );
-	}
-
 	// Always use overlay colors for submenus
 	const innerBlocksColors = getColors( context, true );
+
+	if ( isAtMaxNesting ) {
+		pull( ALLOWED_BLOCKS, 'core/dropdown' );
+	}
+
 	const innerBlocksProps = useInnerBlocksProps(
 		{
-			className: classnames(
-				'wp-block-navigation-link__container',
-				'wp-block-navigation__submenu-container',
-				{
-					'is-parent-of-selected-block': isParentOfSelectedBlock,
-					'has-text-color': !! (
-						innerBlocksColors.textColor ||
-						innerBlocksColors.customTextColor
-					),
-					[ `has-${ innerBlocksColors.textColor }-color` ]: !! innerBlocksColors.textColor,
-					'has-background': !! (
-						innerBlocksColors.backgroundColor ||
-						innerBlocksColors.customBackgroundColor
-					),
-					[ `has-${ innerBlocksColors.backgroundColor }-background-color` ]: !! innerBlocksColors.backgroundColor,
-				}
-			),
+			className: classnames( 'wp-block-dropdown__container', {
+				'is-parent-of-selected-block': isParentOfSelectedBlock,
+				'has-text-color': !! (
+					innerBlocksColors.textColor ||
+					innerBlocksColors.customTextColor
+				),
+				[ `has-${ innerBlocksColors.textColor }-color` ]: !! innerBlocksColors.textColor,
+				'has-background': !! (
+					innerBlocksColors.backgroundColor ||
+					innerBlocksColors.customBackgroundColor
+				),
+				[ `has-${ innerBlocksColors.backgroundColor }-background-color` ]: !! innerBlocksColors.backgroundColor,
+			} ),
 			style: {
 				color: innerBlocksColors.customTextColor,
 				backgroundColor: innerBlocksColors.customBackgroundColor,
@@ -503,7 +480,7 @@ export default function NavigationLinkEdit( {
 		{
 			allowedBlocks: ALLOWED_BLOCKS,
 			renderAppender:
-				( isSelected && hasDescendants ) ||
+				isSelected ||
 				( isImmediateParentOfSelectedBlock &&
 					! selectedBlockHasDescendants ) ||
 				// Show the appender while dragging to allow inserting element between item and the appender.
@@ -513,36 +490,7 @@ export default function NavigationLinkEdit( {
 		}
 	);
 
-	const classes = classnames(
-		'wp-block-navigation-link__content',
-		'wp-block-navigation-item__content',
-		{
-			'wp-block-navigation-link__placeholder': ! url,
-		}
-	);
-
-	let missingText = '';
-	switch ( type ) {
-		case 'post':
-			/* translators: label for missing post in navigation link block */
-			missingText = __( 'Select post' );
-			break;
-		case 'page':
-			/* translators: label for missing page in navigation link block */
-			missingText = __( 'Select page' );
-			break;
-		case 'category':
-			/* translators: label for missing category in navigation link block */
-			missingText = __( 'Select category' );
-			break;
-		case 'tag':
-			/* translators: label for missing tag in navigation link block */
-			missingText = __( 'Select tag' );
-			break;
-		default:
-			/* translators: label for missing values in navigation link block */
-			missingText = __( 'Add link' );
-	}
+	const ParentElement = url ? 'a' : 'button';
 
 	return (
 		<Fragment>
@@ -569,7 +517,9 @@ export default function NavigationLinkEdit( {
 					<TextareaControl
 						value={ description || '' }
 						onChange={ ( descriptionValue ) => {
-							setAttributes( { description: descriptionValue } );
+							setAttributes( {
+								description: descriptionValue,
+							} );
 						} }
 						label={ __( 'Description' ) }
 						help={ __(
@@ -596,19 +546,9 @@ export default function NavigationLinkEdit( {
 			</InspectorControls>
 			<div { ...blockProps }>
 				{ /* eslint-disable jsx-a11y/anchor-is-valid */ }
-				<a className={ classes }>
+				<ParentElement className="wp-block-dropdown__parent">
 					{ /* eslint-enable */ }
-					{ ! url ? (
-						<div className="wp-block-navigation-link__placeholder-text">
-							<KeyboardShortcuts
-								shortcuts={ {
-									enter: () =>
-										isSelected && setIsLinkOpen( true ),
-								} }
-							/>
-							{ missingText }
-						</div>
-					) : (
+					{
 						<RichText
 							ref={ ref }
 							identifier="label"
@@ -633,13 +573,8 @@ export default function NavigationLinkEdit( {
 								'core/image',
 								'core/strikethrough',
 							] }
-							onClick={ () => {
-								if ( ! url ) {
-									setIsLinkOpen( true );
-								}
-							} }
 						/>
-					) }
+					}
 					{ isLinkOpen && (
 						<Popover
 							position="bottom center"
@@ -689,16 +624,19 @@ export default function NavigationLinkEdit( {
 										attributes
 									)
 								}
-								onRemove={ removeLink }
+								onRemove={ () => {
+									setAttributes( { url: '' } );
+									speak( __( 'Link removed.' ), 'assertive' );
+								} }
 							/>
 						</Popover>
 					) }
-					{ hasDescendants && showSubmenuIcon && (
-						<span className="wp-block-navigation-link__submenu-icon wp-block-navigation__submenu-icon">
+					{ showSubmenuIcon && (
+						<span className="wp-block-navigation-link__submenu-icon">
 							<ItemSubmenuIcon />
 						</span>
 					) }
-				</a>
+				</ParentElement>
 				<div { ...innerBlocksProps } />
 			</div>
 		</Fragment>

@@ -37,7 +37,8 @@
 
 // Only show the flyout on hover if the parent menu item is selected.
 .wp-block-navigation:not(.is-selected):not(.has-child-selected) .has-child:hover {
-	> .wp-block-navigation-link__container {
+	> .wp-block-navigation-link__container,
+	> .wp-block-dropdown__container {
 		opacity: 0;
 		visibility: hidden;
 	}
