@@ -281,6 +281,7 @@ persistencePlugin.__unstableMigrate = ( pluginOptions ) => {
 		persistence,
 		'core/edit-widgets'
 	);
+	migrateFeaturePreferencesToInterfaceStore( persistence, 'core/edit-post' );
 };
 
 export default persistencePlugin;
